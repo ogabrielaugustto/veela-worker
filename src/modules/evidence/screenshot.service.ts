@@ -117,10 +117,17 @@ export async function captureScreenshot(url: string): Promise<ScreenshotResult> 
     await page.setDefaultTimeout(PAGE_TIMEOUT_MS);
 
     try {
-      await page.goto(url, {
+      const response = await page.goto(url, {
         timeout: PRIMARY_NAVIGATION_TIMEOUT_MS,
         waitUntil: "domcontentloaded",
       });
+      if (response && response.status() >= 400) {
+        throw new ExternalServiceError(
+          `Site returned HTTP ${response.status()} during screenshot capture`,
+          "screenshot_http_error",
+          response.status() === 429 || response.status() >= 500,
+        );
+      }
     } catch (error) {
       if (!isNavigationTimeout(error)) {
         throw error;
@@ -152,6 +159,9 @@ export async function captureScreenshot(url: string): Promise<ScreenshotResult> 
       capturedAt: new Date().toISOString(),
     };
   } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      throw error;
+    }
     throw new ExternalServiceError(
       error instanceof Error ? error.message : "Failed to capture screenshot",
       "screenshot_capture_failed",
